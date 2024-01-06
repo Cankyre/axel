@@ -185,7 +185,11 @@ pub fn iterative_deepening_search(
 
         if let Some(result) = res {
             visited_nodes += result.nodes;
-            best_results = Some(result);
+            best_results = Some(result.clone());
+
+            if result.eval == Mate(depth as i32) {
+                break;
+            }
         }
 
         if please_stop.get().is_none() {
@@ -194,7 +198,7 @@ pub fn iterative_deepening_search(
                 best_results.as_ref().unwrap(),
                 depth,
                 start_time.elapsed().as_millis(),
-                visited_nodes as u128 / (start_time.elapsed().as_millis() + 1),
+                visited_nodes / (start_time.elapsed().as_secs() + 1),
                 transpositon_table.len() * 1000 / transpositon_table.capacity()
             )
         }

@@ -47,7 +47,7 @@ pub async fn run_uci_engine() -> Result {
                 let tt = Arc::clone(&transpositon_table);
 
                 task::spawn(async move {
-                    iterative_deepening_search(&p, 10, stop, tt, 4);
+                    iterative_deepening_search(&p, 255, stop, tt, 4);
                 });
             }
             UciReport::Stop => if please_stop.set(()).is_ok() {},

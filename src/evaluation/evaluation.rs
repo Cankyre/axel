@@ -42,7 +42,8 @@ impl PartialOrd for Evaluation {
 
         let to_tuple = |eval: &Evaluation| match eval {
             Centipawns(v) => (*v, 0),
-            Mate(v) if *v > 0 => (i32::MAX - 1, *v),
+            Mate(v) if *v > 0 => (i32::MAX - 1, -*v),
+            Mate(0) => (i32::MIN + 1, i32::MIN),
             Mate(v) => (i32::MIN + 1, *v),
             Max => (i32::MAX, 0),
             Min => (i32::MIN, 0),
