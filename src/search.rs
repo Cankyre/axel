@@ -3,7 +3,7 @@ use std::{sync::OnceLock, thread};
 use async_std::sync::Arc;
 use shakmaty::{
     zobrist::{Zobrist64, ZobristHash},
-    Chess, Move, Position,
+    CastlingMode, Chess, Move, Position,
 };
 
 use super::evaluation::{
@@ -95,11 +95,13 @@ pub fn alpha_beta_search(params: AlphaBetaParams, input: AlphaBetaInput) -> Opti
 
         let p = position.with(&m);
 
-        let mut move_result = alpha_beta_search(
+        let mut move_result = match alpha_beta_search(
             AlphaBetaParams::new(depth - 1, beta.to_deeper(), alpha.to_deeper()),
             AlphaBetaInput::new(&p, &please_stop.clone(), &transpositon_table.clone()),
-        )
-        .unwrap();
+        ) {
+            Some(r) => r,
+            None => return None,
+        };
 
         nodes += move_result.nodes;
         let eval = Evaluation::from_deeper(&move_result.eval);
@@ -159,7 +161,14 @@ pub fn iterative_deepening_search(
 
         let mut results = vec![];
         for t in threads {
-            results.push(t.join().unwrap().unwrap());
+            let r = match t.join() {
+                Ok(r) => r,
+                Err(_) => None,
+            };
+
+            if let Some(result) = r {
+                results.push(result);
+            }
         }
 
         let mut res = None;
@@ -193,6 +202,12 @@ pub fn iterative_deepening_search(
 
     println!(
         "bestmove {}",
-        best_results.as_ref().unwrap().pv.last().unwrap()
+        best_results
+            .as_ref()
+            .unwrap()
+            .pv
+            .last()
+            .unwrap()
+            .to_uci(CastlingMode::Standard)
     );
 }
