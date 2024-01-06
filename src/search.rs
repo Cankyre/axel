@@ -20,6 +20,12 @@ use move_ordering::order_moves;
 use transpositon_table::*;
 use util::*;
 
+/// Performs a quiescence search to a specified depth and returns the
+/// result.
+///
+/// A quiescence search evaluates only captures and other forcing moves
+/// to prevent horizon effects. It is used in conjunction with the main
+/// alpha-beta search to improve move ordering and evaluation.
 fn quiescence_search(position: &Chess, alpha: Evaluation, beta: Evaluation) -> (Evaluation, u64) {
     let mut alpha = alpha;
 
@@ -59,6 +65,15 @@ fn quiescence_search(position: &Chess, alpha: Evaluation, beta: Evaluation) -> (
     (alpha, nodes)
 }
 
+/// Performs an alpha-beta search to a specified depth and returns the
+/// result.
+///
+/// `params` contains the search depth, alpha and beta bounds.
+/// `input` contains the position to search, a stop signal, and the
+/// transposition table.
+///
+/// Returns `Some(result)` if the search completes, otherwise returns
+/// `None` if interrupted.
 pub fn alpha_beta_search(params: AlphaBetaParams, input: AlphaBetaInput) -> Option<SearchResult> {
     let (depth, alpha, beta) = params.as_tuple();
     let (position, please_stop, transpositon_table) = input.as_tuple();
@@ -133,6 +148,17 @@ pub fn alpha_beta_search(params: AlphaBetaParams, input: AlphaBetaInput) -> Opti
     Some(best_results)
 }
 
+/// Performs an iterative deepening search from the given position, up to the specified maximum depth.
+///
+/// Uses multiple threads to parallelize the search, with each thread performing an alpha-beta search
+/// at increasing depths. Results from each depth are collected and the best result is returned.
+///
+/// The `please_stop` Arc<OnceLock> is used as a stop signal that can be triggered from another thread
+/// to halt the search early.
+///
+/// The `transposition_table` is used to cache results and avoid re-searching variations.
+///
+/// Returns the best search result found, containing the score, principal variation, and number of nodes searched.
 pub fn iterative_deepening_search(
     position: &Chess,
     max_depth: u8,

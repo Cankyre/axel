@@ -148,6 +148,7 @@ const EG_KING_TABLE: [[i32; 8]; 8] = [
   [-53, -34, -21, -11, -28, -14, -24, -43]
 ];
 
+/// Returns a reference to the middlegame piece square table for the given piece role.
 fn middlegame_table(kind: Role) -> &'static [[i32; 8]; 8] {
     match kind {
         Pawn => &MG_PAWN_TABLE,
@@ -159,6 +160,7 @@ fn middlegame_table(kind: Role) -> &'static [[i32; 8]; 8] {
     }
 }
 
+/// Returns a reference to the endgame piece square table for the given piece role.
 fn endgame_table(kind: Role) -> &'static [[i32; 8]; 8] {
     match kind {
         Pawn => &EG_PAWN_TABLE,
@@ -170,6 +172,7 @@ fn endgame_table(kind: Role) -> &'static [[i32; 8]; 8] {
     }
 }
 
+/// Returns the middlegame piece square table value for the given piece role.
 pub fn middlegame_piece_val(kind: Role) -> i32 {
     match kind {
         Pawn => 82,
@@ -181,6 +184,7 @@ pub fn middlegame_piece_val(kind: Role) -> i32 {
     }
 }
 
+/// Returns the endgame piece square table value for the given piece role.
 pub fn endgame_piece_val(kind: Role) -> i32 {
     match kind {
         Pawn => 94,
@@ -192,6 +196,7 @@ pub fn endgame_piece_val(kind: Role) -> i32 {
     }
 }
 
+/// Returns the relative value of a piece kind for determining the game phase.
 pub fn game_phase_val(kind: Role) -> i32 {
     match kind {
         Pawn => 0,
@@ -203,6 +208,7 @@ pub fn game_phase_val(kind: Role) -> i32 {
     }
 }
 
+/// Returns the middlegame and endgame piece square table scores for the given piece on the given square.
 pub fn get_pst_score(piece: &Piece, square: &Square) -> (i32, i32) {
     let middlegame_table = middlegame_table(piece.role);
     let endgame_table = endgame_table(piece.role);

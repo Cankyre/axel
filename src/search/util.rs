@@ -79,10 +79,6 @@ impl SearchResult {
         let (eval, nodes) = qsearch_result;
         Self::new(eval, vec![], nodes)
     }
-
-    // pub fn default() -> Self {
-    //     Self::from_evaluation(Evaluation::Min)
-    // }
 }
 
 impl Clone for SearchResult {

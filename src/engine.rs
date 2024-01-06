@@ -5,6 +5,9 @@ use dashmap::DashMap;
 use shakmaty::{fen::Fen, uci::Uci, Chess, Position};
 use std::{fmt::Result, str::FromStr, sync::OnceLock};
 
+/// Runs the UCI protocol engine, reading from stdin and writing to stdout.
+/// Handles commands like `uci`, `isready`, `position`, `go`, etc. and runs
+/// the search algorithm when needed.
 pub async fn run_uci_engine() -> Result {
     let stdin = stdin();
     let mut message_buffer = String::new();

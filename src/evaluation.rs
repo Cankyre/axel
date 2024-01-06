@@ -8,6 +8,10 @@ pub mod obvious;
 mod pesto;
 use pesto::*;
 
+/// Evaluates the given chess board position and returns a score
+/// for the side to move. Positive scores favor White, negative
+/// scores favor Black. Accounts for material balance, piece square
+/// tables, and game phase.
 pub fn evaluate(board: &Chess) -> i32 {
     let mut phase = 0;
 
