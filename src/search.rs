@@ -1,63 +1,54 @@
-use std::sync::OnceLock;
+use std::{sync::OnceLock, thread};
 
-use async_std::sync::{Arc, Mutex};
-use shakmaty::{zobrist::ZobristHash, CastlingMode, Chess, Move, Position};
+use async_std::sync::Arc;
+use shakmaty::{
+    zobrist::{Zobrist64, ZobristHash},
+    Chess, Move, Position,
+};
 
-use async_recursion::async_recursion;
-
-use super::evaluation::evaluate;
+use super::evaluation::{
+    evaluate,
+    obvious::get_obvious_evaluation,
+    Evaluation::{self, *},
+};
 
 mod move_ordering;
-mod search_evaluation;
-mod search_result;
 pub mod transpositon_table;
+mod util;
 
-use search_evaluation::Evaluation::{self, *};
-use search_result::SearchResult;
+use move_ordering::order_moves;
 use transpositon_table::*;
+use util::*;
 
-#[async_recursion]
-async fn quiescence_search(
-    position: &Chess,
-    alpha: Evaluation,
-    beta: Evaluation,
-    visited_nodes: &mut u64,
-) -> Evaluation {
+fn quiescence_search(position: &Chess, alpha: Evaluation, beta: Evaluation) -> (Evaluation, u64) {
     let mut alpha = alpha;
 
-    let standing_pat = Evaluation::LowerBound(evaluate(position));
+    let standing_pat = Evaluation::Centipawns(evaluate(position));
 
-    if position.is_checkmate() {
-        return Mate(0);
+    if let Some(e) = get_obvious_evaluation(position) {
+        return (e, 1);
     }
 
     if standing_pat >= beta {
-        return beta;
+        return (beta, 1);
     }
 
     if alpha < standing_pat {
         alpha = standing_pat;
     }
 
-    let captures = move_ordering::order_moves(&position.capture_moves());
+    let captures = order_moves(&position.capture_moves());
 
-    *visited_nodes += captures.len() as u64;
+    let mut nodes = 1;
     for m in captures {
-        let mut p = position.clone();
+        let p = position.with(&m);
 
-        p.play_unchecked(&m);
-        let eval = Evaluation::from_deeper(
-            &quiescence_search(
-                &p,
-                Evaluation::from_deeper(&beta),
-                Evaluation::from_deeper(&alpha),
-                visited_nodes,
-            )
-            .await,
-        );
+        let res = quiescence_search(&p, beta.to_deeper(), alpha.to_deeper());
+        let eval = Evaluation::from_deeper(&res.0);
+        nodes += res.1;
 
         if beta <= eval {
-            return beta;
+            return (beta, nodes);
         }
 
         if eval > alpha {
@@ -65,240 +56,143 @@ async fn quiescence_search(
         }
     }
 
-    match alpha {
-        Mate(a) => Mate(a),
-        LowerBound(a) | UpperBound(a) => Exact(a),
-        _ => alpha,
+    (alpha, nodes)
+}
+
+pub fn alpha_beta_search(params: AlphaBetaParams, input: AlphaBetaInput) -> Option<SearchResult> {
+    let (depth, alpha, beta) = params.as_tuple();
+    let (position, please_stop, transpositon_table) = input.as_tuple();
+
+    if please_stop.get().is_some() {
+        return None;
     }
-}
 
-pub async fn add_to_transposition_table(
-    position: &Chess,
-    eval: &Evaluation,
-    depth: u16,
-    pv: &[Move],
-    transpositon_table: &Arc<Mutex<TranspositionTable>>,
-) {
-    let mut guard = transpositon_table.lock().await;
-    guard.insert(
-        position.zobrist_hash(shakmaty::EnPassantMode::Legal),
-        TranspositionTableEntry::new(eval.clone(), depth, Vec::from(pv)),
-    );
-    drop(guard);
-}
+    if let Some(eval) = get_obvious_evaluation(position) {
+        return Some(SearchResult::from_evaluation(eval));
+    }
 
-pub async fn get_from_transposition_table<'a>(
-    position: &Chess,
-    transpositon_table: &Arc<Mutex<TranspositionTable>>,
-    depth_left: u16,
-) -> Option<TranspositionTableEntry> {
-    let guard = transpositon_table.lock().await;
-    if let Some(entry) = guard.get(position.zobrist_hash(shakmaty::EnPassantMode::Legal)) {
-        if entry.depth >= depth_left {
-            return Some(entry.clone());
+    if depth == 0 {
+        return Some(SearchResult::from_qsearch(quiescence_search(
+            position, alpha, beta,
+        )));
+    }
+
+    let table_hit = transpositon_table.get(&position.zobrist_hash(shakmaty::EnPassantMode::Legal));
+    if let Some(entry) = table_hit {
+        if entry.depth >= depth {
+            return Some(SearchResult::new(entry.eval, entry.pv.clone(), 1));
         }
     }
 
-    None
-}
+    let mut nodes = 1;
+    let mut alpha = alpha;
+    let mut best_pv: Vec<Move> = vec![];
 
-#[async_recursion]
-pub async fn alpha_beta_search(
-    position: &Chess,
-    alpha: Evaluation,
-    beta: Evaluation,
-    depth_left: u16,
-    visited_nodes: &mut u64,
-    please_stop: &Arc<OnceLock<()>>,
-    transpositon_table: &Arc<Mutex<TranspositionTable>>,
-) -> Option<SearchResult> {
-    if depth_left == 0 {
-        return Some(SearchResult {
-            eval: quiescence_search(position, alpha, beta, visited_nodes).await,
-            pv: vec![],
-        });
-    }
-
-    {
-        let guard = transpositon_table.lock().await;
-        if let Some(entry) = guard.get(position.zobrist_hash(shakmaty::EnPassantMode::Legal)) {
-            if entry.depth >= depth_left {
-                return Some(SearchResult {
-                    eval: entry.eval.clone(),
-                    pv: entry.pv.clone(),
-                });
-            }
-        }
-    }
-
-    let mut best_eval = alpha.clone();
-    let mut best_pv = vec![];
-    let moves = move_ordering::order_moves(&position.legal_moves());
-
-    *visited_nodes += moves.len() as u64;
+    let moves = order_moves(&position.legal_moves());
 
     for m in moves {
-        if please_stop.get().is_some() {
-            return None;
-        }
+        nodes += 1;
 
-        let mut p = position.clone();
-        p.play_unchecked(&m);
+        let p = position.with(&m);
 
-        if p.is_checkmate() {
-            return Some(SearchResult {
-                eval: Mate(1),
-                pv: vec![m],
-            });
-        }
+        let mut move_result = alpha_beta_search(
+            AlphaBetaParams::new(depth - 1, beta.to_deeper(), alpha.to_deeper()),
+            AlphaBetaInput::new(&p, &please_stop.clone(), &transpositon_table.clone()),
+        )
+        .unwrap();
 
-        if p.is_stalemate() || p.is_insufficient_material() {
-            return Some(SearchResult {
-                eval: Exact(0),
-                pv: vec![m],
-            });
-        }
-
-        let eval;
-        let mut pv;
-
-        let tt_result = get_from_transposition_table(&p, transpositon_table, depth_left).await;
-
-        if let Some(hit) = tt_result {
-            eval = hit.eval;
-            pv = hit.pv;
-        } else {
-            let move_result = alpha_beta_search(
-                &p,
-                Evaluation::from_deeper(&beta),
-                Evaluation::from_deeper(&best_eval),
-                depth_left - 1,
-                visited_nodes,
-                please_stop,
-                transpositon_table,
-            )
-            .await;
-
-            move_result.as_ref()?;
-
-            eval = Evaluation::from_deeper(&move_result.as_ref().unwrap().eval);
-            pv = move_result.unwrap().pv;
-        }
+        nodes += move_result.nodes;
+        let eval = Evaluation::from_deeper(&move_result.eval);
 
         if beta <= eval {
-            pv.push(m);
-            add_to_transposition_table(position, &beta, depth_left, &pv, transpositon_table).await;
-            return Some(SearchResult { eval: beta, pv });
+            transpositon_table.insert(
+                position.zobrist_hash(shakmaty::EnPassantMode::Legal),
+                TranspositionTableEntry::new(beta, depth, move_result.pv.clone(), nodes),
+            );
+            move_result.eval = beta;
+            move_result.pv.push(m);
+            return Some(move_result);
         }
 
-        if best_eval < eval {
-            best_eval = eval;
-
-            pv.push(m);
-            best_pv = pv;
+        if alpha < eval {
+            alpha = eval;
+            best_pv = move_result.pv;
+            best_pv.push(m);
         }
     }
 
-    add_to_transposition_table(
-        position,
-        &best_eval,
-        depth_left,
-        &best_pv,
-        transpositon_table,
-    )
-    .await;
+    let best_results = SearchResult::new(alpha, best_pv, nodes);
 
-    Some(SearchResult {
-        eval: best_eval,
-        pv: best_pv,
-    })
+    transpositon_table.insert(
+        position.zobrist_hash(shakmaty::EnPassantMode::Legal),
+        TranspositionTableEntry::from_search_result(&best_results, depth),
+    );
+
+    Some(best_results)
 }
 
-fn format_info(eval: &Evaluation, depth: u16, nodes: u64, pv: &[Move], time: u128) -> String {
-    let pv = pv
-        .iter()
-        .map(|m| m.to_uci(CastlingMode::Standard).to_string())
-        .rev()
-        .collect::<Vec<String>>()
-        .join(" ");
-
-    format!(
-        "info score {} depth {} nodes {} time {} pv {} ",
-        eval_to_string(eval),
-        depth,
-        nodes,
-        time,
-        pv
-    )
-}
-
-fn eval_to_string(eval: &Evaluation) -> String {
-    match eval {
-        Exact(v) => format!("cp {}", v),
-        LowerBound(v) => format!("lowerbound {}", v),
-        UpperBound(v) => format!("upperbound {}", v),
-        Mate(v) => format!(
-            "mate {}",
-            match v {
-                0 => 0,
-                v => v.signum() * (v.abs() + 1) / 2,
-            }
-        ),
-        Max => format!("cp {}", i32::MAX),
-        Min => format!("cp {}", i32::MIN),
-    }
-}
-
-pub async fn iterative_deepening_search(
+pub fn iterative_deepening_search(
     position: &Chess,
-    max_depth: u16,
+    max_depth: u8,
     please_stop: Arc<OnceLock<()>>,
-    transpositon_table: Arc<Mutex<TranspositionTable>>,
-) -> Option<SearchResult> {
-    let start = std::time::Instant::now();
+    transpositon_table: Arc<DashMap<Zobrist64, TranspositionTableEntry>>,
+    num_threads: u8,
+) {
+    let start_time = std::time::Instant::now();
     let mut best_results = None;
 
     for depth in 1..=max_depth {
         let mut visited_nodes = 0;
-        let res = alpha_beta_search(
-            position,
-            Min,
-            Max,
-            depth,
-            &mut visited_nodes,
-            &please_stop,
-            &transpositon_table,
-        )
-        .await;
+
+        let mut threads = vec![];
+        for _ in 0..num_threads {
+            let please_stop = Arc::clone(&please_stop);
+            let transpositon_table = Arc::clone(&transpositon_table);
+            let position = position.clone();
+            threads.push(thread::spawn(move || {
+                alpha_beta_search(
+                    AlphaBetaParams::new(depth, Min, Max),
+                    AlphaBetaInput::new(&position, &please_stop, &transpositon_table),
+                )
+            }));
+        }
+
+        let mut results = vec![];
+        for t in threads {
+            results.push(t.join().unwrap().unwrap());
+        }
+
+        let mut res = None;
+        for r in results {
+            if res.is_none() {
+                res = Some(r);
+                continue;
+            }
+
+            if r.eval > res.as_ref().unwrap().eval {
+                res = Some(r);
+            }
+        }
 
         if let Some(result) = res {
+            visited_nodes += result.nodes;
             best_results = Some(result);
         }
 
         if please_stop.get().is_none() {
             println!(
-                "{}",
-                format_info(
-                    &best_results.as_ref().unwrap().eval,
-                    depth,
-                    visited_nodes,
-                    &best_results.as_ref().unwrap().pv,
-                    start.elapsed().as_millis()
-                )
-            );
+                "info {} depth {} time {} nps {} hashfull {}",
+                best_results.as_ref().unwrap(),
+                depth,
+                start_time.elapsed().as_millis(),
+                visited_nodes as u128 / (start_time.elapsed().as_millis() + 1),
+                transpositon_table.len() * 1000 / transpositon_table.capacity()
+            )
         }
     }
 
     println!(
         "bestmove {}",
-        best_results
-            .as_ref()
-            .unwrap()
-            .pv
-            .last()
-            .unwrap()
-            .to_uci(CastlingMode::Standard)
+        best_results.as_ref().unwrap().pv.last().unwrap()
     );
-
-    best_results
 }

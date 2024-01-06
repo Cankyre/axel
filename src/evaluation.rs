@@ -1,5 +1,10 @@
 use shakmaty::{Chess, Color, Position};
 
+#[allow(clippy::module_inception)]
+pub mod evaluation;
+pub use evaluation::*;
+pub mod obvious;
+
 mod pesto;
 use pesto::*;
 
