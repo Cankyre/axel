@@ -1,0 +1,50 @@
+# Fichiers de build Julia
+Manifest.toml
+
+# Caches et artefacts Julia
+.julia/
+.julia-gc-lock
+.julia_sysimage.*
+
+# Données temporaires
+*.jl.cov
+*.jl.*~
+*.tmp
+*.log
+
+# Notebooks (si vous en utilisez)
+.ipynb_checkpoints/
+
+# Dossiers de test/benchmarks temporaires
+bench/*.out
+bench/*.dat
+tests/tmp/
+tests/*.out
+
+# Fichiers système
+.DS_Store
+Thumbs.db
+
+# Fichiers d'éditeur courants
+*.swp
+*.swo
+*.bak
+*~
+
+# VSCode
+.vscode/
+*.code-workspace
+
+# Emacs
+*#*#
+.\#*
+
+# PyCharm / IntelliJ
+.idea/
+
+# JetBrains IDEs caches
+.cache/
+
+# Fichiers de configuration utilisateur
+*.env
+.env.*
