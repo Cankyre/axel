@@ -52,6 +52,6 @@ function uci_loop()
     end
 end
 
-export UciEngine, uci_loop, parse_position
+export UciEngine, uci_loop, parse_position, fen_fixed_epsq
 
 end
