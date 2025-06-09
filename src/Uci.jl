@@ -4,6 +4,8 @@ using Chess
 
 const STARTPOS_FEN = "rn1qkbnr/pppb1ppp/8/3pp3/8/5NP1/PPPPPPBP/RNBQK2R w KQkq - 0 1"
 
+include("Utils/UciHelper.jl")
+
 mutable struct UciEngine
     board::Chess.Board
     display_info::Bool
@@ -31,18 +33,25 @@ function uci_loop()
         elseif cmd == "ucinewgame"
             engine = UciEngine()
         elseif cmd == "position"
-            if args[1] == "startpos"
-                engine.board = fromfen(STARTPOS_FEN)
+            b = parse_position!(args)
+            if isnothing(b)
+                println("info string error position not registered")
             else
-                engine.board = fromfen(join(args, " "))
+                engine.board = b
             end
         elseif cmd == "go"
             # TODO
-            continue
+            println("info string error not implemented")
         elseif cmd == "quit"
             break
+        elseif cmd in ["debug", "setoption", "register", "stop", "ponderhit"]
+            println("info string error not implemented")
+        else
+            println("info string error invalid command") 
         end
     end
 end
+
+export UciEngine, uci_loop, parse_position
 
 end
