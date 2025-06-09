@@ -20,7 +20,17 @@ function uci_loop()
 
     while true
         line = readline(stdin)
+
+        if isempty(line)
+            continue
+        end
+
         tokens = split(line)
+
+        if isempty(tokens)
+            continue
+        end
+        
         cmd = tokens[1]
         args = tokens[2:end]
 
@@ -33,7 +43,7 @@ function uci_loop()
         elseif cmd == "ucinewgame"
             engine = UciEngine()
         elseif cmd == "position"
-            b = parse_position!(args)
+            b = parse_position(args)
             if isnothing(b)
                 println("info string error position not registered")
             else
