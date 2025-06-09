@@ -1,5 +1,5 @@
 using Test
-using Axel.UCI 
+using Axel.UCI
 using Chess
 
 @testset "`position` command parsing" begin
