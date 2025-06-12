@@ -2,6 +2,7 @@
 module UCI
 
 using Chess
+using ..Search
 
 const STARTPOS_FEN = "rn1qkbnr/pppb1ppp/8/3pp3/8/5NP1/PPPPPPBP/RNBQK2R w KQkq - 0 1"
 
@@ -55,8 +56,10 @@ function uci_loop()
                 engine.board = b
             end
         elseif cmd == "go"
-            # TODO
-            println("info string error not implemented")
+            bestmove = Search.search(engine.board)
+            println("bestmove $(bestmove[1][1])")
+        elseif cmd == "stop"
+            cancel_search()
         elseif cmd == "quit"
             break
         elseif cmd in ["debug", "setoption", "register", "stop", "ponderhit"]

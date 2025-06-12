@@ -2,10 +2,9 @@ module Axel
 
 using Chess
 
-include("Uci.jl")
 include("Search/Search.jl")
+include("Uci.jl")
 
-export UCI
-export Search
+export UCI, Search
 
 end # module Axel
