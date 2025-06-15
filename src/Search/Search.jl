@@ -8,7 +8,7 @@ export is_search_cancelled, cancel_search, reset_stop_flag, search
 include("../Utils/SearchHelper.jl")
 include("./Negamax.jl")
 
-const ROOT_POOL = ThreadPools.StaticPool(Threads.nthreads()-1)
+const ROOT_POOL = ThreadPools.StaticPool(Threads.nthreads() - 1)
 
 function search(board::Board)
     search(board, 255)
@@ -23,8 +23,8 @@ function search(board::Board, max_depth::Int)
             break
         end
 
-        result = (depth >= 3) ? search_parallel_root(board, depth) :
-                                search_sequential_root(board, depth)
+
+        result = search_sequential_root(board, depth)
 
         if is_search_cancelled()
             abs_eval = result[2] * sidetomove(board)
@@ -33,7 +33,7 @@ function search(board::Board, max_depth::Int)
         end
 
         if !isnothing(result) && !isempty(result) && isfinite(result[2])
-            println("info depth $depth score cp $(round(Int, result[2] * 100)) pv $(join(result[1], " "))")
+            println("info depth $depth score cp $(round(Int, result[2] * 100)) pv $(join(tostring.(result[1]), " "))")
         end
         previous_result = result
     end
@@ -46,22 +46,29 @@ function search_sequential_root(board::Board, depth::Int)
     best_pv = String[]
 
     for move in moves(board)
-        new_board = deepcopy(board)
-        domove!(new_board, move)
+        u = domove!(board, move)
+        pv, score = negamax(board, depth - 1)
+        undomove!(board, u)
 
-        pv, score = negamax(new_board, depth - 1)
+        if isnothing(score)
+            return (best_pv, best_score)
+        end
+
         score = -score
-        full_pv = [string(move); pv]
+        full_pv = [move; pv...]
 
         if score > best_score
             best_score = score
             best_pv = full_pv
         end
+
+        yield()
     end
 
     return (best_pv, best_score)
 end
 
+"WARNING: This function is a WIP and should not be used at the moment"
 function search_parallel_root(board::Board, depth::Int)
     legalmoves = moves(board)
     results = [([], -Inf) for _ in 1:length(legalmoves)]
@@ -75,7 +82,7 @@ function search_parallel_root(board::Board, depth::Int)
 
             pv, score = negamax(new_board, depth - 1)
             score = -score
-            results[i] = ([string(move); pv], score)
+            results[i] = ([move; pv...], score)
         end
     end
 
