@@ -22,6 +22,7 @@ end
 - Supported: `uci`, `isready`, `ucinewgame`, `position`, `quit`.
 If a command is not yet implemented, will send an `info string error`"""
 function uci_loop()
+    search_task = nothing
     engine = UciState()
 
     while true
@@ -56,9 +57,16 @@ function uci_loop()
                 engine.board = b
             end
         elseif cmd == "go"
-            bestmove = Search.search(engine.board)
-            println("bestmove $(bestmove[1][1])")
+            if !isnothing(search_task)
+                println("info string error search already running")
+            end
+            search_task = @async begin
+                bestmove = Search.search(engine.board)
+                println("bestmove $(bestmove[0][1])")
+                search_task = nothing
+            end
         elseif cmd == "stop"
+            println("info string received stop")
             cancel_search()
         elseif cmd == "quit"
             break
