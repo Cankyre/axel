@@ -63,11 +63,11 @@ function uci_loop()
             search_task = @async begin
                 bestmove = Search.search(engine.board)
                 println("bestmove $(bestmove[0][1])")
-                search_task = nothing
             end
         elseif cmd == "stop"
             println("info string received stop")
             cancel_search()
+            search_task = nothing
         elseif cmd == "quit"
             break
         elseif cmd in ["debug", "setoption", "register", "stop", "ponderhit"]

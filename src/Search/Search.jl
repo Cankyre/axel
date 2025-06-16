@@ -43,7 +43,7 @@ end
 
 function search_sequential_root(board::Board, depth::Int)
     best_score = -Inf
-    best_pv = String[]
+    best_pv = Move[]
 
     for move in moves(board)
         u = domove!(board, move)

@@ -1,4 +1,5 @@
 using Chess
+using ..Evaluation: evaluate
 
 function negamax(board::Board, depth::Int)
     return negamax(board, depth, -Inf, Inf)
@@ -11,8 +12,7 @@ function negamax(
     β::Float64,
 )
     if depth == 0
-        # TODO Replace with actual evaluation function
-        return ([], rand(-10.0:10.0:0.1, 1)[1])
+        return ([], evaluate(board))
     end
 
     if is_search_cancelled()
